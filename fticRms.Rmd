@@ -1,0 +1,36 @@
+---
+title: "fticRms"
+subtitle: "FTICR-MS data processing and visualization for petroleomics applications"
+author: "Renzo C. Silva"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+## Introduction | Read me
+
+This repository hosts a series of self-contained scripts that handle common data processing and visualization steps in ultrahigh mass spectrometry applications. In particular, Fourier transform ion cyclotron resonance mass spectrometry data applied to Petroleomics is focused herein. 
+
+There are a few R packages able to process FTICR-MS datasets: [FTICRMS](https://cran.r-project.org/web/packages/FTICRMS/index.html) and [ftmsRanalysis](https://github.com/EMSL-Computing/ftmsRanalysis), to name a couple. Readers are encouraged to test those for a more comprehensive approach. The `fticRms` repo is not meant to become a competing package. Instead, I aim at sharing code that has been useful for a free-styler like myself.
+
+## Input data examples
+
+A set of 16 samples analyzed by FTICR-MS using an electrospray ion source operating at negative ion mode is provided in `/data_input/Sample*.xls`. These files are representative of an output of a commercial FTICR-MS data processing software. 
+
+```{r echo = TRUE, message = FALSE}
+library(readxl)
+library(DT)
+filelist <- list.files("./data_input/", full.names = TRUE)
+datatable(head(read_excel(filelist[1], skip = 6),
+              10),
+          options = list(scrollX = TRUE))
+```
+
+
+
+
+
+
+
