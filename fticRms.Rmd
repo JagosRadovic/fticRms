@@ -22,14 +22,49 @@ A set of 16 samples analyzed by FTICR-MS using an electrospray ion source operat
 ```{r echo = TRUE, message = FALSE}
 library(readxl)
 library(DT)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(magrittr)
+
 filelist <- list.files("./data_input/", full.names = TRUE)
 datatable(head(read_excel(filelist[1], skip = 6),
-              10),
+              1000),
           options = list(scrollX = TRUE))
 ```
 
+## Data clean-up in a pre-process function
 
+Some data clean-up and transformation is needed at this point. A function 'pre_process' that aimes at taking the dataset as is and transforming it to a more digestable format is derived. The key steps for this data transformation are: (a) selecting relevant columns and rows, and (b) breaking down molecular formulae into their atomic composition, which in turn will be factors in the data analysis downstream. 
 
+```{r echo = TRUE, message = FALSE}
+
+pre_process <- function(file_name) {
+  
+  dir.create(paste0("./",output_folder,"/"), showWarnings = FALSE)
+  
+  peaks <-
+    # Clear out data frame
+    read_excel(file_name, skip = 6) %>%
+    select(c(3, 6, 15, 13, 8, 12, 16)) %>%
+    filter(!is.na(Formula), DBE != "DBE") %>%
+    
+    # Break down molecular formulas into single atoms
+    mutate(
+      C = str_extract(Formula, "(?<=C)[0-9]*"),
+      H = str_extract(Formula, "(?<=H)[0-9]*"),
+      S = str_extract(Formula, "(?<=S)[0-9]*"),
+      O = str_extract(Formula, "(?<=O)[0-9]*"),
+      N = str_extract(Formula, "(?<=N)[0-9]*")
+    ) %>%
+    replace_na(list(S = 0, O = 0, N = 0)) %>%
+    mutate_at(2:12, as.numeric) %>%
+    replace_na(list(S = 1, O = 1, N = 1)) %>%
+    mutate(Class = str_extract(Formula, "[NSO](.*)")) %>%
+    replace_na(list(Class = "CH")) %>%
+    mutate(DBE = DBE - 0.5)
+}
+```
 
 
 
