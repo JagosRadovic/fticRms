@@ -33,39 +33,87 @@ datatable(head(read_excel(filelist[1], skip = 6),
           options = list(scrollX = TRUE))
 ```
 
-## Data clean-up in a pre-process function
+## Data clean-up and pre-processing considerations
 
-Some data clean-up and transformation is needed at this point. A function 'pre_process' that aimes at taking the dataset as is and transforming it to a more digestable format is derived. The key steps for this data transformation are: (a) selecting relevant columns and rows, and (b) breaking down molecular formulae into their atomic composition, which in turn will be factors in the data analysis downstream. 
+Some data clean-up and transformation is needed at this point. A function 'pre_process' that aims at taking the dataset and selecting desired rows and columns is derived then applied to individual files in the dataset, and results are combined into a single data frame. Herein, monoisotopic intensities are selected to represent the peak intensity. 
 
-```{r echo = TRUE, message = FALSE}
+> Note: Using monoisotopic intensities is the standard approach when representing FTICR-MS results in plots and discussions. This default option needs to be challenged when applying such data in multivariate statistical models. Should the algorithm ingest raw monoisotopic intensities? What is the best metric to ultimately associate with compound intensity? Subject matter expertise is needed here! There are dozen different approaches published in the scientific literature, but that doesn't mean they are good and robust. Discussions on the data processing strategies are beyond this walkthrough's scope. Here, for the sake of exemple, monoisotopic intensities are selected and no correction relative to baseline or monoisotopic abundance is applied.  
+
+Different strategies for data storage optimization may be considered. Three different tables are created but they all share the same identifier based on detected molecular formulae. 
+
+```{r echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
 
 pre_process <- function(file_name) {
-  
-  dir.create(paste0("./",output_folder,"/"), showWarnings = FALSE)
-  
-  peaks <-
-    # Clear out data frame
-    read_excel(file_name, skip = 6) %>%
+  # Clear out data frame
+  read_excel(file_name, skip = 6) %>%
     select(c(3, 6, 15, 13, 8, 12, 16)) %>%
-    filter(!is.na(Formula), DBE != "DBE") %>%
-    
-    # Break down molecular formulas into single atoms
-    mutate(
-      C = str_extract(Formula, "(?<=C)[0-9]*"),
-      H = str_extract(Formula, "(?<=H)[0-9]*"),
-      S = str_extract(Formula, "(?<=S)[0-9]*"),
-      O = str_extract(Formula, "(?<=O)[0-9]*"),
-      N = str_extract(Formula, "(?<=N)[0-9]*")
-    ) %>%
-    replace_na(list(S = 0, O = 0, N = 0)) %>%
-    mutate_at(2:12, as.numeric) %>%
-    replace_na(list(S = 1, O = 1, N = 1)) %>%
-    mutate(Class = str_extract(Formula, "[NSO](.*)")) %>%
-    replace_na(list(Class = "CH")) %>%
-    mutate(DBE = DBE - 0.5)
+    filter(!is.na(Formula), DBE != "DBE")
 }
+
+# Combined filed 1st
+formulae <- sapply(filelist, pre_process, simplify = FALSE) %>%
+  bind_rows(.id = "Sample") %>%
+  #Capture sample name from file name
+  mutate(Sample = tools::file_path_sans_ext(basename(Sample))) %>%
+  mutate_at(3:ncol(.), as.numeric)
+
+# Table with intensities
+intensities <- formulae %>%
+  select(Sample, Formula, `Mono Inty`) %>%
+  spread(key = "Sample", value = "Mono Inty")
+
+# Table with assignment errors
+errors <- formulae %>%
+  select(Sample, Formula, `ppm Error`) %>%
+  spread(key = "Sample", value = "ppm Error")
+
+# Table with formula meta info
+formulae <- formulae %>%
+  select(Formula, `Calc m/z`, DBE, `Isotope frac`) %>%
+  # Break down molecular formulas into single elements; adjust DBE values
+  #A = Na, L = Cl
+  mutate(
+    C = str_extract(Formula, "(?<=C)[0-9]*"),
+    H = str_extract(Formula, "(?<=H)[0-9]*"),
+    A = str_extract(Formula, "(?<=Na)[0-9]*"),
+    S = str_extract(Formula, "(?<=S)[0-9]*"),
+    O = str_extract(Formula, "(?<=O)[0-9]*"),
+    N = str_extract(Formula, "(?<=N)[0-9]*"),
+    L = str_extract(Formula, "(?<=Cl)[0-9]*")
+  ) %>%
+  replace_na(list(
+    A = 0,
+    S = 0,
+    O = 0,
+    N = 0,
+    L = 0
+  )) %>%
+  mutate_at(2:ncol(.), as.numeric) %>%
+  replace_na(list(
+    A = 1,
+    S = 1,
+    O = 1,
+    N = 1,
+    L = 1
+  )) %>%
+  mutate(Class = str_extract(Formula, "[ANSOL](.*)")) %>%
+  replace_na(list(Class = "CH")) %>%
+  mutate(DBE = DBE - 0.5)
+
 ```
 
+
+
+```{r}
+datatable(head(formulae,
+              1000),
+          options = list(scrollX = TRUE))
+
+datatable(head(intensities,
+              1000),
+          options = list(scrollX = TRUE))
+
+```
 
 
 
