@@ -26,6 +26,7 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 library(magrittr)
+library(ggplot2)
 
 filelist <- list.files("./data_input/", full.names = TRUE)
 datatable(head(read_excel(filelist[1], skip = 6),
@@ -102,8 +103,6 @@ formulae <- formulae %>%
 
 ```
 
-
-
 ```{r}
 datatable(head(formulae,
               1000),
@@ -112,8 +111,99 @@ datatable(head(formulae,
 datatable(head(intensities,
               1000),
           options = list(scrollX = TRUE))
+```
+
+## Sample labeling
+
+Further sample info has been provided in the input file `sampleset_info.xlsx`, which shows that 12 samples are classified as belonging to groups A|B, whereas 4 samples are labeled as "U" - unknown group. 
+
+```{r}
+labels <- read_excel("sampleset_info.xlsx")
+table(labels)
 
 ```
+
+## Data visualization
+
+In this section, the framework to produce the most used plots for FTICR-MS analysis is presented. For such complex datasets, there are several different ways to visualize data while searching for insights that would help understand the system. A few selected plots are presented. Other supporting info derived from the original tables, such as a vector with the total sample monoisotopic intensity, are also prepared.  
+
+```{r}
+#This code chunk joins the 'labels', 'formulae' and 'intensities' tables to prepare a dataframe more adequate for the ggplot2 framework.
+
+total_int <- intensities[,-1] %>% 
+  replace(is.na(.), 0) %>%
+  summarise_all(sum)
+
+
+
+
+```
+
+### Filtering the data
+
+A filtering functionality to be applied to any plot is defined. Here, the user chooses which molecular formulae will be further considered in the plots. For example, one may want to investigate the carbon number distribution of DBE 2 species in the heteroatom class O2, and these filters will have to be dynamically adjusted. Or even if all the variables are selected, perhaps the user wants to filter out one sample from the database.  
+```{r}
+
+# User inputs required
+
+# Define filters
+select_class <- unique(formulae$Class)
+select_DBE <- unique(formulae$DBE)
+select_C <- unique(formulae$C)
+select_samples <- unique(labels$Sample)
+
+# Define the plot type
+plot_type <- "Class" #"Class", "DBE", "C"
+
+#Apply filters
+filtered <- formulae %>%
+  filter(Class %in% select_class, # Class filter
+         DBE %in% select_DBE, # DBE filter
+         C %in% select_C) %>% # Carbon number filter
+  select(Formula, Parameter = plot_type) # Plot type filter
+
+#Get joined data.frame for plotting
+intensities %>%
+  #Normalize intensities to total sample intensity
+  mutate_at(vars(-Formula), funs(./sum(., na.rm = TRUE))) %>%
+  gather(key = Sample, value = Intensity, 2:ncol(.)) %>%
+  filter(!is.na(Intensity)) %>%
+  right_join(filtered, by = "Formula") %>%
+  left_join(labels, by = "Sample") %>%
+  select(-Formula) %>%
+  group_by(Parameter, Sample, Group) %>%
+  summarise(Intensity = sum(Intensity)) %>%
+  
+  #Start ggplot
+  ggplot(aes(
+    x = Parameter,
+    y = Intensity,
+    fill = Sample,
+    color = Group
+  )) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0, size = 14, face = "italic"),
+    legend.background = element_rect(size = 1,
+                                     linetype = "solid"),
+    legend.position = "right"
+  ) +
+  labs(y= "Relative Intensity", x = "Heteroatom class") +
+  scale_color_brewer(palette = "Dark2", name = "Formation") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+
+
+```
+
+
+
+
+
+
 
 
 
